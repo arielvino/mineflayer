@@ -1122,6 +1122,57 @@ for (const supportedVersion of mineflayer.testedVersions) {
         })
       })
 
+      it('entity velocity is in blocks per tick', (done) => {
+        // lpVec3 (1.21.9+) is already decoded to blocks/tick; older versions send 1/8000 blocks/tick
+        const lpVec3 = bot.registry.supportFeature('entityVelocityIsLpVec3')
+        const toWire = (v) => lpVec3 ? v : { x: v.x * 8000, y: v.y * 8000, z: v.z * 8000 }
+        const assertVelocity = (actual, expected) => {
+          for (const axis of ['x', 'y', 'z']) {
+            assert.ok(Math.abs(actual[axis] - expected[axis]) < 1e-3, `velocity.${axis} expected ${expected[axis]} got ${actual[axis]}`)
+          }
+        }
+        const spawnVel = { x: 0.5, y: -0.25, z: 1 }
+        const updateVel = { x: -1.5, y: 0.75, z: 0.125 }
+        server.on('playerJoin', (client) => {
+          client.write('login', bot.test.generateLoginPacket())
+          bot.once('entitySpawn', (entity) => {
+            try {
+              assertVelocity(entity.velocity, spawnVel)
+            } catch (err) {
+              return done(err)
+            }
+            bot._client.once('entity_velocity', () => {
+              setImmediate(() => {
+                try {
+                  assertVelocity(entity.velocity, updateVel)
+                  done()
+                } catch (err) {
+                  done(err)
+                }
+              })
+            })
+            client.write('entity_velocity', { entityId: 8, velocity: toWire(updateVel) })
+          })
+          const entities = bot.registry.entitiesByName
+          const creeperId = entities.creeper ? entities.creeper.id : entities.Creeper.id
+          client.write(bot.registry.supportFeature('consolidatedEntitySpawnPacket') ? 'spawn_entity' : 'spawn_entity_living', {
+            entityId: 8,
+            entityUUID: '00112233-4455-6677-8899-aabbccddeeff',
+            objectUUID: '00112233-4455-6677-8899-aabbccddeeff',
+            type: creeperId,
+            x: 10,
+            y: 11,
+            z: 12,
+            yaw: 0,
+            pitch: 0,
+            headPitch: 0,
+            objectData: 0,
+            velocity: toWire(spawnVel),
+            metadata: []
+          })
+        })
+      })
+
       it('player displayName', (done) => {
         server.on('playerJoin', (client) => {
           bot.on('entitySpawn', (entity) => {
