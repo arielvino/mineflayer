@@ -900,7 +900,7 @@ for (const supportedVersion of mineflayer.testedVersions) {
             // echo assertions on the schema so this test is green before and after
             // the data update, while still pinning the behavior the moment the
             // fields are serializable.
-            const schema = bot.registry.protocol.types.packet_teleport_confirm
+            const schema = bot.registry.protocol.play.toServer.types.packet_teleport_confirm
             const schemaNames = Array.isArray(schema) && Array.isArray(schema[1])
               ? schema[1].map(f => f && f.name)
               : []
