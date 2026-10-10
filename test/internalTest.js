@@ -1068,6 +1068,28 @@ for (const supportedVersion of mineflayer.testedVersions) {
         assert.ok(block.position.equals(pos))
         assert.strictEqual(isOpen, 1)
       })
+
+      it('emits chestLidMove once when the server repeats that a chest is closed', async () => {
+        const pos = vec3(1, 65, 1)
+        const chestId = bot.registry.blocksByName.chest.id
+        const location = { x: pos.x, y: pos.y, z: pos.z }
+        const [client] = await once(server, 'playerJoin')
+        client.write('login', bot.test.generateLoginPacket())
+        const chunk = bot.test.buildChunk()
+        chunk.setBlockType(pos, chestId)
+        client.write('map_chunk', generateChunkPacket(chunk))
+        await once(bot, 'chunkColumnLoad')
+
+        const seen = []
+        const onLid = (block, viewers) => seen.push(viewers)
+        bot.on('chestLidMove', onLid)
+        // The second "0 viewers" is no change; the open after it marks the end.
+        const marker = onceWithCleanup(bot, 'chestLidMove', { timeout: 2000, checkCondition: (block, viewers) => viewers === 2 })
+        for (const viewers of [1, 0, 0, 2]) client.write('block_action', { location, byte1: 1, byte2: viewers, blockId: chestId })
+        await marker
+        bot.removeListener('chestLidMove', onLid)
+        assert.deepStrictEqual(seen, [1, 0, 2])
+      })
     })
 
     describe('abilities', () => {
