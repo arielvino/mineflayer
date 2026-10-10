@@ -2316,6 +2316,29 @@ for (const supportedVersion of mineflayer.testedVersions) {
           }
         })
       })
+
+      it('keeps usingHeldItem when another entity gets a status', async () => {
+        const [client] = await once(server, 'playerJoin')
+        await bot.test.pluginsLoaded
+        const loggedIn = once(bot, 'login')
+        client.write('login', bot.test.generateLoginPacket())
+        await loggedIn
+        bot.quickBarSlot = 0
+        bot.inventory.updateSlot(bot.QUICK_BAR_START, new Item(registry.itemsByName.stone.id, 1))
+        bot.activateItem()
+        assert.strictEqual(bot.usingHeldItem, true)
+        // A mob nearby being hurt is not the bot finishing its own use.
+        const other = bot.entity.id + 5
+        const otherSeen = onceWithCleanup(bot._client, 'entity_status', { timeout: 2000, checkCondition: (p) => p.entityId === other })
+        client.write('entity_status', { entityId: other, entityStatus: 2 })
+        await otherSeen
+        assert.strictEqual(bot.usingHeldItem, true)
+        // The bot's own "finished using" does end it.
+        const ownSeen = onceWithCleanup(bot._client, 'entity_status', { timeout: 2000, checkCondition: (p) => p.entityId === bot.entity.id })
+        client.write('entity_status', { entityId: bot.entity.id, entityStatus: 9 })
+        await ownSeen
+        assert.strictEqual(bot.usingHeldItem, false)
+      })
     })
 
     describe('heldItemChanged', () => {
