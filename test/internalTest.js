@@ -1219,6 +1219,24 @@ for (const supportedVersion of mineflayer.testedVersions) {
         })
       })
 
+      it('emits game when the server changes the difficulty', (done) => {
+        server.on('playerJoin', async (client) => {
+          try {
+            client.write('login', bot.test.generateLoginPacket())
+            await once(bot, 'login')
+            // The field is a name mapper on newer versions and a plain number before.
+            const field = registry.protocol.play.toClient.types.packet_difficulty[1][0].type
+            const game = onceWithCleanup(bot, 'game', { timeout: 1000 })
+            client.write('difficulty', { difficulty: typeof field === 'string' ? 3 : 'hard', difficultyLocked: false })
+            await game
+            assert.strictEqual(bot.game.difficulty, 'hard')
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+
       it('window titles are ChatMessages whatever shape the server sends', async () => {
         const Item = require('prismarine-item')(registry)
         // A component title plus the bare-string form third-party servers send.
