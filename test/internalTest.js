@@ -2088,6 +2088,41 @@ for (const supportedVersion of mineflayer.testedVersions) {
       })
     })
 
+    describe('titles and action bar', () => {
+      // Styled text: an NBT compound (1.20.3+) or JSON whose words are all in extra.
+      function styledText (text) {
+        return registry.supportFeature('chatPacketsUseNbtComponents')
+          ? nbt.comp({ text: nbt.string(text), color: nbt.string('red'), bold: nbt.byte(1) })
+          : JSON.stringify({ text: '', extra: [{ text, color: 'red', bold: true }] })
+      }
+
+      it('emits a styled title as plain text', async () => {
+        const [client] = await once(server, 'playerJoin')
+        client.write('login', bot.test.generateLoginPacket())
+        await once(bot, 'login')
+        const title = onceWithCleanup(bot, 'title', { timeout: 2000 })
+        if (bot.supportFeature('titleUsesLegacyPackets')) {
+          client.write('title', { action: 0, text: styledText('Boss fight') })
+        } else {
+          client.write('set_title_text', { text: styledText('Boss fight') })
+        }
+        const [text, type] = await title
+        assert.strictEqual(text, 'Boss fight')
+        assert.strictEqual(type, 'title')
+      })
+
+      it('emits actionBar for the action_bar packet', async function () {
+        if (!registry.protocol.play.toClient.types.packet_action_bar) return this.skip()
+        const [client] = await once(server, 'playerJoin')
+        client.write('login', bot.test.generateLoginPacket())
+        await once(bot, 'login')
+        const bar = onceWithCleanup(bot, 'actionBar', { timeout: 2000 })
+        client.write('action_bar', { text: styledText('You may not rest now') })
+        const [msg] = await bar
+        assert.strictEqual(msg.toString(), 'You may not rest now')
+      })
+    })
+
     describe('scoreboard reset on login', () => {
       function teamAddPacket (teamName, players) {
         const text = registry.supportFeature('teamUsesChatComponents') ? chatText : (s) => s
