@@ -82,7 +82,7 @@ export interface BotEvents {
   breath: () => Promise<void> | void
   abilities: (abilities: Abilities) => Promise<void> | void
   entitySwingArm: (entity: Entity) => Promise<void> | void
-  entityHurt: (entity: Entity, source: Entity) => Promise<void> | void
+  entityHurt: (entity: Entity, source: Entity, damageType?: string) => Promise<void> | void
   entityDead: (entity: Entity) => Promise<void> | void
   entityTaming: (entity: Entity) => Promise<void> | void
   entityTamed: (entity: Entity) => Promise<void> | void
