@@ -187,7 +187,7 @@
       - ["abilities" (abilities)](#abilities-abilities)
       - ["entityAttributes" (entity)](#entityattributes-entity)
       - ["entitySwingArm" (entity)](#entityswingarm-entity)
-      - ["entityHurt" (entity)](#entityhurt-entity)
+      - ["entityHurt" (entity, source, damageType)](#entityhurt-entity-source-damagetype)
       - ["entityDead" (entity)](#entitydead-entity)
       - ["entityTaming" (entity)](#entitytaming-entity)
       - ["entityTamed" (entity)](#entitytamed-entity)
@@ -1361,7 +1361,13 @@ Fires when the server sends the abilities packet, with the new [bot.abilities](#
 Fires when an attribute of an entity changes.
 
 #### "entitySwingArm" (entity)
-#### "entityHurt" (entity)
+#### "entityHurt" (entity, source, damageType)
+
+Fires when an entity takes damage.
+
+* `source` - the entity responsible, if any (1.19.4+)
+* `damageType` - the damage type's name from the server's registry: `fall`, `in_wall`, `lava`, `mob_attack`, ... (1.19.4+)
+
 #### "entityDead" (entity)
 #### "entityTaming" (entity)
 #### "entityTamed" (entity)
