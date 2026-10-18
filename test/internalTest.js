@@ -322,6 +322,105 @@ for (const supportedVersion of mineflayer.testedVersions) {
       })
     })
 
+    describe('dig', () => {
+      const blockPos = vec3(1, 65, 1)
+      const ids = { start: 0, finish: 2 }
+
+      // A bot standing next to a dirt block, physics off so onGround stays what the test sets.
+      function joinNextToDirt (onDigPacket) {
+        bot.once('chunkColumnLoad', async () => {
+          bot.physicsEnabled = false
+          bot.entity.position = vec3(1.5, 65, 2.5)
+          bot.entity.eyeHeight = 1.62
+          bot.entity.onGround = true
+          bot.entity.effects = {}
+          bot.game.gameMode = 'survival'
+          onDigPacket.ready()
+        })
+        server.on('playerJoin', (client) => {
+          client.on('block_dig', (packet) => onDigPacket(client, packet))
+          client.write('login', bot.test.generateLoginPacket())
+          const chunk = bot.test.buildChunk()
+          chunk.setBlockType(blockPos, bot.registry.blocksByName.dirt.id)
+          client.write('map_chunk', generateChunkPacket(chunk))
+        })
+      }
+
+      // The server's answer to a finish it turned down: the block stays, as after a vanilla
+      // server's "delayed destroy". 1.19+ acknowledges the sequence, 1.14-1.18 the position and
+      // the block's state; older versions send nothing.
+      function refuse (client, packet) {
+        const ack = registry.protocol?.play?.toClient?.types?.packet_acknowledge_player_digging?.[1]
+        if (!ack) return
+        if (ack.some(f => f.name === 'sequenceId')) {
+          client.write('acknowledge_player_digging', { sequenceId: packet.sequence })
+        } else {
+          client.write('acknowledge_player_digging', {
+            location: blockPos, block: bot.registry.blocksByName.dirt.minStateId, status: packet.status, successful: true
+          })
+        }
+      }
+
+      it('resolves only once the server breaks the block, digging again after a refused finish', function (done) {
+        const sent = []
+        let digPromise
+        let settled = false
+        const onDigPacket = (client, packet) => {
+          sent.push(packet.status === ids.start ? 'start' : packet.status === ids.finish ? 'finish' : packet.status)
+          if (packet.status !== ids.finish) return
+          if (sent.filter(s => s === 'finish').length === 1) {
+            refuse(client, packet)
+            setTimeout(() => {
+              try {
+                assert.strictEqual(settled, false, 'dig() resolved although the server kept the block')
+                assert.strictEqual(bot.blockAt(blockPos).name, 'dirt', 'the bot predicted air the server never sent')
+              } catch (err) { done(err) }
+            }, 100)
+          } else {
+            client.write('block_change', { location: blockPos, type: 0 })
+          }
+        }
+        onDigPacket.ready = () => {
+          digPromise = bot.dig(bot.blockAt(blockPos), 'ignore')
+          digPromise.then(() => {
+            settled = true
+            try {
+              assert.deepStrictEqual(sent, ['start', 'finish', 'start', 'finish'])
+              assert.strictEqual(bot.blockAt(blockPos).name, 'air')
+              done()
+            } catch (err) { done(err) }
+          }, done)
+        }
+        joinNextToDirt(onDigPacket)
+      })
+
+      it('counts progress at the current speed: leaving the ground mid-dig delays the finish', function (done) {
+        let t0
+        const onDigPacket = (client, packet) => {
+          if (packet.status === ids.start) {
+            t0 = performance.now()
+            return
+          }
+          if (packet.status !== ids.finish) return
+          const elapsed = performance.now() - t0
+          client.write('block_change', { location: blockPos, type: 0 })
+          try {
+            // Dirt by hand takes 750 ms on the ground, five times that in the air: half the
+            // dig on the ground leaves 375 ms of ground work to do at 1/5 speed, 1875 ms.
+            assert(elapsed > 1800, `finish sent after ${elapsed.toFixed(0)} ms, as if still on the ground`)
+            done()
+          } catch (err) { done(err) }
+        }
+        onDigPacket.ready = () => {
+          const block = bot.blockAt(blockPos)
+          assert.strictEqual(bot.digTime(block), 750)
+          bot.dig(block, 'ignore').catch(done)
+          setTimeout(() => { bot.entity.onGround = false }, 375)
+        }
+        joinNextToDirt(onDigPacket)
+      })
+    })
+
     describe('physics', () => {
       const pos = vec3(1, 65, 1)
       const goldId = 41
